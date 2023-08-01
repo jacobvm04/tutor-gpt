@@ -6,16 +6,18 @@ from agent.chain import load_chains
 from agent.cache import LRUCache
 
 def init():
-    global OBJECTIVE_THOUGHT_CHAIN, \
-    OBJECTIVE_RESPONSE_CHAIN, \
+    global THOUGHT_CHAIN, \
+    RESPONSE_CHAIN, \
+    THOUGHT_REVISION_CHAIN, \
     CACHE, \
     THOUGHT_CHANNEL
     
     CACHE = LRUCache(50)
     THOUGHT_CHANNEL = os.environ["THOUGHT_CHANNEL_ID"]
     ( 
-        OBJECTIVE_THOUGHT_CHAIN, 
-        OBJECTIVE_RESPONSE_CHAIN, 
+        THOUGHT_CHAIN, 
+        RESPONSE_CHAIN, 
+        THOUGHT_REVISION_CHAIN,
     ) = load_chains()
     
 load_dotenv()
