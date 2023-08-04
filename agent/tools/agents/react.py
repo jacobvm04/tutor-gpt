@@ -36,6 +36,11 @@ def respond(message: str):
     """Use to finalize your response to the student"""
     return message
 
+def extract_response(message: str):
+    """Use to extract the response from the LLM's message"""
+    
+    return message.split("Response:")[1].strip() if "Response:" in message else None
+
 
 class ReACTAgentOpenAI:
     def __init__(self, llm: ChatOpenAI, tools: List[Tool], max_steps: int = 10):
@@ -56,77 +61,42 @@ class ReACTAgentOpenAI:
 
     def plan(self):
         """Plan and take an action. Returns the response if one is generated this step."""
-
+        
         # Step 1: Reason about what to do
-        self.conversation_history.append(HumanMessage(content="Reason about what action you are going to take, or just return a response if you do are done."))
+        self.conversation_history.append(HumanMessage(content="Reason about what you are going to do and which tool you are going to use, or just return a response if you do are done."))
 
         message = self.llm.predict_messages(self.conversation_history)
         self.conversation_history.append(message)
         print(message)
         
-        # Check if the message is prefixed with "Response:"
-        # if message.content.contains("Response:"):
-        #     response = message.content.replace("Response:", "").strip()
-        #     return response
-        if "Response:" in message.content:
-            response = message.content.split("Response:")[1].strip()
+
+        if response := extract_response(message.content):
             return response
 
-        # tool_name, arguments = process_openai_function_call(message)
-        # if tool_name is None:
-        #     # print(message)
-        #     thought_message = AIMessagePromptTemplate.from_template(f"Thought: {message.content}").format()
-        #     self.conversation_history.append(thought_message)
 
-        #     print("processed:", process_openai_function_call(message))
-
-        #     print(f"Thought: {message.content}")
-
-            # return message.content
-
-        # match tool_name:
-        #     case "think":
-        #         thought = think(**arguments)
-        #         thought_message = AIMessage(content=f"Thought: {thought}")
-        #         self.conversation_history.append(thought_message)
-
-        #         print(f"Thought: {thought}")
-        #     case "respond":
-        #         response = respond(**arguments)
-
-        #         print(f"Response: {response}")
-                # return response
         
         # Step 2: Take an action
-        self.conversation_history.append(HumanMessage(content="Take an action, or respond."))
+        self.conversation_history.append(HumanMessage(content="Use a tool, or respond."))
 
         message = self.llm.predict_messages(self.conversation_history, functions=self.tools_openai)
         tool_name, arguments = process_openai_function_call(message)
         if tool_name is None:
             # Check if the message is prefixed with "Response:"
-            if "Response:" in message.content:
-                response = message.content.split("Response:")[1].strip()
+            if response := extract_response(message.content):
                 return response
             
-        # Check if the tool is "respond"
-        if tool_name == "respond":
-            response = respond(**arguments)
-
-            print(f"Response: {response}")
-            return response
-
         # find the tool that matches the tool name
         for tool in self.tools:
             if tool.name == tool_name:
-                action_message = AIMessage(content=f"Action: Use \"{tool_name}\" with arguments: {arguments}")
+                action_message = AIMessage(content=f"Tool Usage: Used \"{tool_name}\" with arguments: {arguments}")
                 self.conversation_history.append(action_message)
 
                 observation = tool(arguments["__arg1"])
-                observation_message = AIMessage(content=f"Action Result: ```{observation}```")
+                observation_message = AIMessage(content=f"Tool Result: ```{observation}```")
                 self.conversation_history.append(observation_message)
 
-                print(f"Action: {tool_name}({arguments})")
-                print(f"Observation: {observation}")
+                print(f"Tool: {tool_name}({arguments})")
+                print(f"Action: {observation}")
 
                 break
 
