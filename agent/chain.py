@@ -3,6 +3,7 @@ import validators
 
 from langchain.chat_models import ChatOpenAI
 from langchain import LLMChain
+from langchain.agents import initialize_agent, AgentType
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import (
     ChatPromptTemplate,
@@ -12,6 +13,10 @@ from langchain.prompts import (
 from langchain.prompts import load_prompt
 
 from dotenv import load_dotenv
+from agent.response_agent import initialize_response_agent
+from agent.tools.agents.react import ReACTAgentOpenAI
+
+from agent.tools.wolfram import WolframAlphaTool
 
 load_dotenv()
 
@@ -26,6 +31,13 @@ OBJECTIVE_HUMAN_RESPONSE = load_prompt(os.path.join(os.path.dirname(__file__), '
 # OBJECTIVE_HUMAN_RESPONSE = load_prompt("./data/prompts/objective/human/response.yaml")
 # OBJECTIVE_SUMMARY_THOUGHT = load_prompt("data/prompts/objective/summaries/thought.yaml")
 # OBJECTIVE_SUMMARY_RESPONSE = load_prompt("data/prompts/objective/summaries/response.yaml")
+
+
+# TODO: Move this to some sort of config file instead of hardcoding it here
+def load_tools():
+    """Load the agent's tools"""
+
+    return [WolframAlphaTool()]
 
 
 def load_memories(conversation_type: str = "objective"):
@@ -62,7 +74,7 @@ def load_memories(conversation_type: str = "objective"):
 
 def load_chains():
     """Logic for loading the chain you want to use should go here."""
-    llm = ChatOpenAI(model_name = "gpt-4", temperature=1.2)
+    llm = ChatOpenAI(model_name = "gpt-4-0613", temperature=0.3)
 
     # chatGPT prompt formatting
     objective_system_thought = SystemMessagePromptTemplate(prompt=OBJECTIVE_SYSTEM_THOUGHT)
@@ -105,11 +117,24 @@ async def chat(**kwargs):
         # get the history into a string
         history = response_memory.load_memory_variables({})['history']
 
-        response = await response_chain.apredict(
-            input=inp,
-            thought=thought,
-            history=history
+        objective_system_response = SystemMessagePromptTemplate(prompt=OBJECTIVE_SYSTEM_RESPONSE)
+        objective_human_response = HumanMessagePromptTemplate(prompt=OBJECTIVE_HUMAN_RESPONSE)
+
+        tools = load_tools()
+        tool_names = [tool.name for tool in tools]
+
+        response_agent = ReACTAgentOpenAI(
+            llm=response_chain.llm,
+            tools=load_tools(),
         )
+        response_agent.load_prompts([objective_system_response.format(thought=thought, tools=tool_names), objective_human_response.format(history=history, input=inp)])
+        response = response_agent.run()
+
+        # response = await response_chain.apredict(
+        #     input=inp,
+        #     thought=thought,
+        #     history=history
+        # )
         if 'Student:' in response:
             response = response.split('Student:')[0].strip()
         if 'Studen:' in response:

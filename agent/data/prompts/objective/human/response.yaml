@@ -1,8 +1,5 @@
 _type: prompt
-input_variables:
-  ["history", "input"]
+input_variables: ["history", "input"]
 template: |
-  "{history}
-  BEGIN DIALOGUE
+  {history}
   User: {input}
-  Bloom:"
