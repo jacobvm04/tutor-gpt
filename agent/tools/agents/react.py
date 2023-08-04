@@ -73,8 +73,6 @@ class ReACTAgentOpenAI:
         if response := extract_response(message.content):
             return response
 
-
-        
         # Step 2: Take an action
         self.conversation_history.append(HumanMessage(content="Use a tool, or respond."))
 
