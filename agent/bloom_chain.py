@@ -28,6 +28,7 @@ class BloomChain:
         self.system_tools = SystemMessagePromptTemplate(prompt=SYSTEM_TOOLS).format()
 
         # setup tools
+        # TODO: setup tool retreival
         self.tools = load_tools(["google-serper", "wolfram-alpha", "wikipedia", "arxiv"], llm=llm)
         self.tools_openai = [format_tool_to_openai_function(tool) for tool in self.tools]
         self.tool_names = [tool.name for tool in self.tools]
@@ -122,6 +123,7 @@ class BloomChain:
         """Generate Bloom's response to the user."""
 
         # load message history
+        # TODO: Is the "thought: " prefix necessary?
         messages = [self.system_response, *response_memory.messages, HumanMessage(content=input), AIMessage(content=f"Thought: {thought}")]
         response_message = self.llm.predict_messages(messages)
 
