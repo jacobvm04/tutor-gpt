@@ -27,7 +27,7 @@ def load_memories():
 
 def load_chains():
     """Logic for loading the chain you want to use should go here."""
-    llm = ChatOpenAI(model_name = "gpt-4", temperature=1.2)
+    llm = ChatOpenAI(model_name = "gpt-4-0613", temperature=1.2)
 
     # define chain
     bloom_chain = BloomChain(
@@ -41,8 +41,8 @@ def load_chains():
 async def chat(**kwargs):
     # if we sent a thought across, generate a response
     if kwargs.get('thought'):
-        assert kwargs.get('response_chain'), "Please pass the response chain."
-        response_chain: BloomChain = kwargs.get('response_chain')
+        assert kwargs.get('bloom_chain'), "Please pass the bloom chain."
+        response_chain: BloomChain = kwargs.get('bloom_chain')
         response_memory: ChatMessageHistory = kwargs.get('response_memory')
         inp = kwargs.get('inp')
         thought = kwargs.get('thought')
@@ -67,9 +67,9 @@ async def chat(**kwargs):
 
     # otherwise, we're generating a thought
     else:
-        assert kwargs.get('thought_chain'), "Please pass the thought chain."
+        assert kwargs.get('bloom_chain'), "Please pass the thought chain."
         inp = kwargs.get('inp')
-        thought_chain: BloomChain = kwargs.get('thought_chain')
+        thought_chain: BloomChain = kwargs.get('bloom_chain')
         thought_memory: ChatMessageHistory = kwargs.get('thought_memory')
 
         # get the history into a string

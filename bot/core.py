@@ -23,13 +23,13 @@ class Core(commands.Cog):
 
         thought = await chat(
             inp=input,
-            thought_chain=bloom_chain,
+            bloom_chain=bloom_chain,
             thought_memory=local_chain.thought_memory
         )
         response = await chat(
             inp=input,
             thought=thought,
-            response_chain=bloom_chain,
+            bloom_chain=bloom_chain,
             response_memory=local_chain.response_memory
         )
 
