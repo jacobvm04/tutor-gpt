@@ -24,8 +24,8 @@ class BloomChain:
 
         # setup prompts
         self.system_thought = SystemMessagePromptTemplate(prompt=SYSTEM_THOUGHT).format()
-        self.system_response = SystemMessagePromptTemplate(prompt=SYSTEM_RESPONSE).format()
         self.system_tools = SystemMessagePromptTemplate(prompt=SYSTEM_TOOLS).format()
+        self.system_response = SystemMessagePromptTemplate(prompt=SYSTEM_RESPONSE)
 
         # setup tools
         # TODO: setup tool retreival
@@ -76,7 +76,6 @@ class BloomChain:
 
                 if "function_call" in thought_message.additional_kwargs:
                     pass
-                    print("Same!")
                 else:
                     messages.append(thought_message)
                     continue
@@ -124,7 +123,7 @@ class BloomChain:
 
         # load message history
         # TODO: Is the "thought: " prefix necessary?
-        messages = [self.system_response, *response_memory.messages, HumanMessage(content=input), AIMessage(content=f"Thought: {thought}")]
+        messages = [self.system_response.format(tools=self.tool_names), *response_memory.messages, HumanMessage(content=input), AIMessage(content=thought)]
         response_message = self.llm.predict_messages(messages)
 
         # verbose logging
