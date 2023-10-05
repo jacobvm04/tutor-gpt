@@ -60,7 +60,7 @@ class SearchTool(BaseTool):
         return cls(llm=llm, embeddings=embeddings, search=search)
 
     def _run(
-        self, query: str, run_manager: Optional[CallbackManagerForToolRun] = None
+        self, query: str, run_manager: Optional[CallbackManagerForToolRun] = None, extra_links: list = [], use_search = True
     ) -> str:
         """Use the tool."""
         results = self.search.results(query=query)
@@ -74,10 +74,15 @@ class SearchTool(BaseTool):
                 "link": result["link"],
                 "summary": self._research_url(result["link"], query),
             } for result in organic_results
-        ]
+        ] + [{
+            "title": "User Provided Link",
+            "snippet": "",
+            "link": link,
+            "summary": self._research_url(link, query),
+        } for link in extra_links]
 
         formatted_results = [
-            f"{result['title']} - {result['link']}\nSnippet: {result['snippet']}\nPage Summary: {result['summary']}" for result in relevant_results
+            f"{result['title']} - {result['link']}\nSnippet: {result['snippet']}\nPage Summary: \"{result['summary']}\"" for result in relevant_results
         ]
         formatted_results = "Search Results:\n" + "\n----------------------\n\n".join(formatted_results)
 
@@ -88,7 +93,7 @@ class SearchTool(BaseTool):
         
 
     async def _arun(
-        self, query: str, run_manager: Optional[AsyncCallbackManagerForToolRun] = None
+        self, query: str, run_manager: Optional[AsyncCallbackManagerForToolRun] = None, extra_links: list = [], use_search = True
     ) -> str:
         """Use the tool asynchronously."""
 
@@ -96,21 +101,39 @@ class SearchTool(BaseTool):
         if query[0] == '"' and query[-1] == '"':
             query = query[1:-1]
 
-        results = await self.search.aresults(query=query)
-        organic_results = results["organic"]
+        if use_search:
+            results = await self.search.aresults(query=query)
+            organic_results = results["organic"]
 
-        summaries = await asyncio.gather(*[self._aresearch_url(result["link"], query) for result in organic_results])
-        relevant_results = [
-            {
-                "title": result["title"],
-                "snippet": result["snippet"],
-                "link": result["link"],
-                "summary": summary,
-            } for result, summary in zip(organic_results, summaries)
-        ]
+            summaries = await asyncio.gather(*[self._aresearch_url(result["link"], query) for result in organic_results] + [self._aresearch_url(link, query) for link in extra_links])
+            relevant_results = [
+                {
+                    "title": result["title"],
+                    "snippet": result["snippet"],
+                    "link": result["link"],
+                    "summary": summary,
+                } for result, summary in zip(organic_results, summaries)
+            ] + [
+                {
+                    "title": "User Provided Link",
+                    "snippet": "",
+                    "link": link,
+                    "summary": summary,
+                } for link, summary in zip(extra_links, summaries)
+            ]
+        else:
+            summaries = await asyncio.gather(*[self._aresearch_url(link, query) for link in extra_links])
+            relevant_results = [
+                {
+                    "title": "User Provided Link",
+                    "snippet": "",
+                    "link": link,
+                    "summary": summary,
+                } for link, summary in zip(extra_links, summaries)
+            ]
 
         formatted_results = [
-            f"{result['title']} - {result['link']}\nSnippet: {result['snippet']}\nPage Summary: {result['summary']}" for result in relevant_results
+            f"{result['title']} - {result['link']}\nSnippet: {result['snippet']}\nPage Summary: \"{result['summary']}\"" for result in relevant_results
         ]
         formatted_results = "Search Results:\n" + "\n----------------------\n\n".join(formatted_results)
 
@@ -160,7 +183,7 @@ class SearchTool(BaseTool):
     async def _aresearch_url(self, url: str, query: str):
         """Research a URL by embedding the web page and then using the most relevant sections to the query to generate a summary of the most important information on the page."""
 
-        prompt = Prompt.from_template("Your job is to summarize the information on the web page AS IT PERTAINS TO THE QUERY. You will be given a few selected sections of the web page to base your answer off of. \n\nQuestion: {query}\n\nBEGIN SELECTIONS\n{doc}\nEND SELECTIONS")
+        prompt = Prompt.from_template("Your job is to summarize the information on the web page AS IT PERTAINS TO THE QUERY. You will be given a few selected sections of the web page to base your answer off of. \n\nQuestion: {query}\n\nBEGIN SELECTIONS\n{doc}\nEND SELECTIONS\n\n")
         llm_chain = LLMChain(llm=self.llm, prompt=prompt)
 
         try:
@@ -177,7 +200,8 @@ class SearchTool(BaseTool):
             # embedding search
             db = FAISS.from_documents(docs, self.embeddings)
             # query prefix is used per instructions https://github.com/FlagOpen/FlagEmbedding
-            relevant_sections = await db.asimilarity_search(query=("Represent this sentence for searching relevant passages: " + query), k=12)
+            # relevant_sections = await db.asimilarity_search(query=("Represent this sentence for searching relevant passages: " + query), k=12)
+            relevant_sections = await db.asimilarity_search(query=query, k=12)
 
             # rerank
             if hasattr(self, "reranker"):

@@ -64,7 +64,7 @@ class BloomChain:
         # self.system_response = SystemMessagePromptTemplate(prompt=SYSTEM_RESPONSE)
         
     @classmethod
-    def think(cls, cache: Conversation, input: str):
+    async def think(cls, cache: Conversation, input: str):
         """Generate Bloom's thought on the user."""
         # load message history
         thought_prompt = ChatPromptTemplate.from_messages([
@@ -72,14 +72,16 @@ class BloomChain:
             *cache.messages("thought"),
             HumanMessage(content=input)
         ])
-        chain = thought_prompt | cls.llm 
+        chain = thought_prompt | cls.llm
 
         cache.add_message("thought", HumanMessage(content=input))
 
-        return Streamable(
-                chain.astream({}, {"tags": ["thought"], "metadata": {"conversation_id": cache.conversation_id, "user_id": cache.user_id}}),
-            lambda thought: cache.add_message("thought", AIMessage(content=thought))
-        )
+        # return Streamable(
+        #         chain.astream({}, {"tags": ["thought"], "metadata": {"conversation_id": cache.conversation_id, "user_id": cache.user_id}}),
+        #     lambda thought: cache.add_message("thought", AIMessage(content=thought))
+        # )
+
+        return (await chain.ainvoke({}, {"tags": ["thought"], "metadata": {"conversation_id": cache.conversation_id, "user_id": cache.user_id}})).content
         
     @classmethod
     async def respond(cls, cache: Conversation, thought: str, input: str):
@@ -92,7 +94,18 @@ class BloomChain:
         ]
 
         search_messages = ChatPromptTemplate.from_messages(messages).format_messages(thought=thought).copy()
-        search_messages.append(SystemMessage(content=f"Reason about whether or not a google search would be benificial to answer the question. Always use it if you are unsure about your knowledge.\n\nf{search_ready_output_parser.get_format_instructions()}"))
+        
+        # extract any links from the input
+        link_output_parser = CommaSeparatedListOutputParser()
+        link_extraction_messages = [SystemMessage(content=f"Extract any links from the the following input. Do not make up links.\nIf there are no links, respond with \"No links found.\"\nEnsure valid formatting is used.\n\n{link_output_parser.get_format_instructions()}"), HumanMessage(content=input)]
+        link_message = await cls.fast_llm.apredict_messages(link_extraction_messages)
+        links = link_output_parser.parse(link_message.content)
+        # if len(links) > 0 and "No links found." in links[0]:
+        if any(["no links found." in link.lower() for link in links]):
+            links = []
+        print("Links: ", links)
+
+        search_messages.append(SystemMessage(content=f"Reason about whether or not a google search would be benificial to answer the question. Always use it if you are unsure about your knowledge. Do not use it to search for links the user has provided, those will be handled seperately.\n\nf{search_ready_output_parser.get_format_instructions()}"))
 
         search_ready_message = await cls.llm.apredict_messages(search_messages)
         search_ready = search_ready_output_parser.parse(search_ready_message.content)
@@ -102,9 +115,13 @@ class BloomChain:
             search_messages.append(SystemMessage(content=f"Now generate a google query that would be best to find information to answer the question."))
             
             search_query_message = await cls.llm.apredict_messages(search_messages)
-            search_result_summary = await cls.search_tool.arun(search_query_message.content)
+            search_result_summary = await cls.search_tool._arun(search_query_message.content, extra_links=links)
 
             messages.append(SystemMessage(content=f"Use the information from these searchs to help answer your question.\nMake sure to not just repeat answers from sources, provide the sources justifications when possible. More detail is better.\n\nRelevant Google Search: {search_query_message.content}\n\n{search_result_summary}\n\nCite your sources via bracket notation with numbers (don't use any other special characters), and include the full links at the end."))
+        elif len(links) > 0:
+            search_result_summary = await cls.search_tool._arun(input, use_search=False, extra_links=links)
+
+            messages.append(SystemMessage(content=f"Use the information from these searchs to help answer your question.\nMake sure to not just repeat answers from sources, provide the sources justifications when possible. More detail is better.\n\nRelevant information from user's links:\n\n{search_result_summary}\n\nCite your sources via bracket notation with numbers (don't use any other special characters), and include the full links at the end."))
 
         response_prompt = ChatPromptTemplate.from_messages(messages)
         chain = response_prompt | cls.llm
@@ -138,8 +155,9 @@ class BloomChain:
 
     @classmethod    
     async def chat(cls, cache: Conversation, inp: str ) -> tuple[str, str]:
-        thought_iterator = cls.think(cache, inp)
-        thought = await thought_iterator()
+        # thought_iterator = await cls.think(cache, inp)
+        # thought = await thought_iterator()
+        thought = await cls.think(cache, inp)
 
         response_iterator = await cls.respond(cache, thought, inp)
         response = await response_iterator()
