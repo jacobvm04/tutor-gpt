@@ -97,7 +97,7 @@ class BloomChain:
         
         # extract any links from the input
         link_output_parser = CommaSeparatedListOutputParser()
-        link_extraction_messages = [SystemMessage(content=f"Extract any links from the the following input. Do not make up links.\nIf there are no links, respond with \"No links found.\"\nEnsure valid formatting is used.\n\n{link_output_parser.get_format_instructions()}"), HumanMessage(content=input)]
+        link_extraction_messages = [SystemMessage(content=f"Extract any links from the the following input. Do not make up links.\nIf there are no links, respond with \"No links found.\"\nEnsure valid formatting is used.\n\n{link_output_parser.get_format_instructions()}\n\nRemember to that your list may ONLY consist of links, no other text."), HumanMessage(content=input)]
         link_message = await cls.fast_llm.apredict_messages(link_extraction_messages)
         links = link_output_parser.parse(link_message.content)
         # if len(links) > 0 and "No links found." in links[0]:
