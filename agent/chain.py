@@ -1,5 +1,6 @@
 import os
 from langchain.chat_models import ChatOpenAI, AzureChatOpenAI
+from langchain.llms import OpenAI
 from langchain.prompts import (
     SystemMessagePromptTemplate,
 )
@@ -11,7 +12,9 @@ from collections.abc import AsyncIterator
 from .cache import Conversation
 
 from agent.tools.search import SearchTool, search_ready_output_parser
-from langchain.embeddings import HuggingFaceBgeEmbeddings
+from langchain.embeddings import HuggingFaceBgeEmbeddings, OpenAIEmbeddings
+
+from langchain.output_parsers import CommaSeparatedListOutputParser
 
 
 load_dotenv()
@@ -30,7 +33,7 @@ class BloomChain:
         llm = AzureChatOpenAI(deployment_name = os.environ['OPENAI_API_DEPLOYMENT_NAME'], temperature=1.2, model_kwargs={"top_p": 0.5})
     else:
         llm = ChatOpenAI(model_name = "gpt-4", temperature=1.2, model_kwargs={"top_p": 0.5})
-        fast_llm = ChatOpenAI(model_name = "gpt-3.5-turbo", temperature=0.3, model_kwargs={"top_p": 0.5})
+        fast_llm = OpenAI(model_name = "gpt-3.5-turbo-instruct", temperature=0.3, top_p=0.5)
 
     system_thought: SystemMessagePromptTemplate = SystemMessagePromptTemplate(prompt=SYSTEM_THOUGHT)
     system_response: SystemMessagePromptTemplate = SystemMessagePromptTemplate(prompt=SYSTEM_RESPONSE)
@@ -39,14 +42,15 @@ class BloomChain:
 
     search_tool: SearchTool
     # Load Embeddings for search
-    model_name = "BAAI/bge-small-en-v1.5"
-    model_kwargs = {'device': 'cpu'}
-    encode_kwargs = {'normalize_embeddings': False}
-    embeddings = HuggingFaceBgeEmbeddings(
-        model_name=model_name,
-        model_kwargs=model_kwargs,
-        encode_kwargs=encode_kwargs
-    )
+    # model_name = "BAAI/bge-small-en-v1.5"
+    # model_kwargs = {'device': 'cpu'}
+    # encode_kwargs = {'normalize_embeddings': False}
+    # embeddings = HuggingFaceBgeEmbeddings(
+    #     model_name=model_name,
+    #     model_kwargs=model_kwargs,
+    #     encode_kwargs=encode_kwargs
+    # )
+    embeddings = OpenAIEmbeddings()
     search_tool = SearchTool.from_llm(llm=fast_llm, embeddings=embeddings)
 
     def __init__(self) -> None:
@@ -78,7 +82,7 @@ class BloomChain:
         )
         
     @classmethod
-    async def respond(cls, cache: ConversationCache, thought: str, input: str):
+    async def respond(cls, cache: Conversation, thought: str, input: str):
         """Generate Bloom's response to the user."""
         
         messages = [

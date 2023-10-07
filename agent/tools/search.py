@@ -12,7 +12,7 @@ from langchain.tools.base import BaseTool
 from langchain.document_loaders import AsyncChromiumLoader
 from langchain.utilities import GoogleSerperAPIWrapper
 
-from langchain.chat_models.base import BaseChatModel
+from langchain.llms.base import BaseLLM
 
 from langchain.document_transformers import Html2TextTransformer
 
@@ -40,12 +40,12 @@ load_dotenv()
 class SearchTool(BaseTool):
     name = "search"
     description = "useful for when you need to search for something on the internet"
-    llm: BaseChatModel
+    llm: BaseLLM
     embeddings: Embeddings
     search: GoogleSerperAPIWrapper
 
     @classmethod
-    def from_llm(cls, llm: BaseChatModel, embeddings: Embeddings):
+    def from_llm(cls, llm: BaseLLM, embeddings: Embeddings):
         """Return a tool from a chat model."""
         search = GoogleSerperAPIWrapper()
         search.k = 3
@@ -160,7 +160,7 @@ class SearchTool(BaseTool):
     async def _aresearch_url(self, url: str, query: str):
         """Research a URL by embedding the web page and then using the most relevant sections to the query to generate a summary of the most important information on the page."""
 
-        prompt = Prompt.from_template("Your job is to write a summary of a web page containing the most essential information to answer a specific question. You will be given a few selected sections of the web page to base your summary off of. \n\nQuestion: {query}\n\nBEGIN SELECTIONS\n{doc}\nEND SELECTIONS")
+        prompt = Prompt.from_template("Your job is to summarize the information on the web page AS IT PERTAINS TO THE QUERY. You will be given a few selected sections of the web page to base your answer off of. \n\nQuestion: {query}\n\nBEGIN SELECTIONS\n{doc}\nEND SELECTIONS")
         llm_chain = LLMChain(llm=self.llm, prompt=prompt)
 
         try:
@@ -176,6 +176,7 @@ class SearchTool(BaseTool):
 
             # embedding search
             db = FAISS.from_documents(docs, self.embeddings)
+            # query prefix is used per instructions https://github.com/FlagOpen/FlagEmbedding
             relevant_sections = await db.asimilarity_search(query=("Represent this sentence for searching relevant passages: " + query), k=12)
 
             # rerank

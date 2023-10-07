@@ -161,7 +161,7 @@ async def stream(inp: ConversationInput):
             thought += item
             yield item
         yield "❀"
-        response_iterator = BloomChain.respond(conversation, thought, inp.message)
+        response_iterator = await BloomChain.respond(conversation, thought, inp.message)
         async for item in response_iterator:
             # if "❀" in item:
             item = item.replace("❀", "🌸")
